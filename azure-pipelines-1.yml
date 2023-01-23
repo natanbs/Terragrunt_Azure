@@ -1,0 +1,57 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger: none
+# - master
+# - azure-pipelines
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+        
+- stage: Plan
+  jobs:
+  - job: Terragrunt_Plan
+    displayName: 'Terragrunt Plan'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Terragrunt Plan'
+      inputs:
+        azureSubscription: $(SERVICECONNECTION)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          export ARM_TENANT_ID=686955dc-4f58-4177-b98c-4ceddb1699e9
+          export ARM_SUBSCRIPTION_ID=40a800ae-b686-43e3-8599-61b3dbbf57d9
+          export ARM_CLIENT_ID=435bec43-99f5-4f7c-b8cb-03cedc832e34
+          export ARM_CLIENT_SECRET=I4H8Q~xU~vslVylWBZ8F2zOQmbLJrWbpZsMRKdsX
+
+          sudo wget -q https://github.com/gruntwork-io/terragrunt/releases/download/$(TG_VERSION)/terragrunt_linux_amd64 -O /usr/local/bin/terragrunt && sudo chmod +x /usr/local/bin/terragrunt 
+          cd $(DIR)
+          pwd
+          terragrunt run-all plan 
+
+- stage: Apply
+  jobs:
+  - job: Terragrunt_Apply
+    displayName: 'Terragrunt Apply'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Terragrunt Apply'
+      inputs:
+        azureSubscription: $(SERVICECONNECTION)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          export ARM_TENANT_ID=686955dc-4f58-4177-b98c-4ceddb1699e9
+          export ARM_SUBSCRIPTION_ID=40a800ae-b686-43e3-8599-61b3dbbf57d9
+          export ARM_CLIENT_ID=435bec43-99f5-4f7c-b8cb-03cedc832e34
+          export ARM_CLIENT_SECRET=I4H8Q~xU~vslVylWBZ8F2zOQmbLJrWbpZsMRKdsX
+
+          sudo wget -q https://github.com/gruntwork-io/terragrunt/releases/download/$(TG_VERSION)/terragrunt_linux_amd64 -O /usr/local/bin/terragrunt && sudo chmod +x /usr/local/bin/terragrunt 
+          cd $(DIR)
+          pwd
+          terragrunt run-all apply --terragrunt-non-interactive

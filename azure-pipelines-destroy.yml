@@ -1,0 +1,76 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger: none
+# - master
+# - azure-pipelines
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+- group: dbM-keys
+- group: dbM-secrets
+
+stages: 
+
+- stage: Terragrunt_Destroy_Stage
+  displayName: 'Terragrunt_Destroy_Stage'
+  jobs:
+  # - job: Manual_Validation
+  #   pool: server
+  #   displayName: 'Manual Validation'
+  #   steps:
+  #   - task: ManualValidation@0
+  #     timeoutInMinutes: 1
+  #     inputs:
+  #       notifyUsers: |
+  #         natanb@tikalk.dev
+  #       instructions: 'Hi, please validate'
+  #       onTimeout: 'Reject'
+  
+  - job: Terragrunt_Destroy_Job
+    displayName: 'Terragrunt_Destroy_Job'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Terragrunt_Destroy_Task'
+      inputs:
+        azureSubscription: $(SERVICECONNECTION)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          # Set subscription per instance
+          case $(INSTANCE) in
+            star01)
+              export subscription=$(SUB_STAR01)
+              echo SUB_STAR01 $subscription
+              ;;
+            star02)
+              export subscription=$(SUB_STAR02)
+              ;;   
+            star03)
+              export subscription=$(SUB_STAR03)
+              ;;         
+            prod)
+              export subscription=$(SUB_STAR01)
+              ;;         
+            prod-t)
+              export subscription=$(SUB_STAR01)
+              ;;         
+            *)
+              echo exit
+              ;;
+          esac
+
+          export ARM_TENANT_ID=$(TENANT_ID)
+          export ARM_SUBSCRIPTION_ID=$subscription
+          export ARM_CLIENT_ID=$(CLIENT_ID)
+          export ARM_CLIENT_SECRET=$(clientSecret)
+
+          sudo wget -q https://github.com/gruntwork-io/terragrunt/releases/download/$(TG_VERSION)/terragrunt_linux_amd64 -O /usr/local/bin/terragrunt && sudo chmod +x /usr/local/bin/terragrunt 
+
+          cd $(PROJECT)/$(ENV)/$(LOCATION)/$(INSTANCE) 
+          pwd         
+          terragrunt run-all destroy --terragrunt-non-interactive

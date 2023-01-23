@@ -1,0 +1,119 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger: none
+# - master
+# - azure-pipelines
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+- group: dbM-keys
+- group: dbM-secrets
+
+stages:            
+- stage: Plan_Stage
+  displayName: 'Plan_Stage'
+  jobs:
+  # - job: Manual_Validation
+  #   pool: server
+  #   displayName: 'Manual Validation'
+  #   steps:
+  #   - task: ManualValidation@0
+  #     timeoutInMinutes: 1
+  #     inputs:
+  #       notifyUsers: |
+  #         natanb@tikalk.dev
+  #       instructions: 'Hi, please validate'
+  #       onTimeout: 'Reject'
+
+  - job: Set_Subscription
+    displayName: Set_Subscription
+    steps:
+      - task: AzureCLI@2
+        displayName: Init Connection
+        inputs:
+          azureSubscription: 'dbMotionSP'
+          scriptType: 'bash'
+          scriptLocation: 'inlineScript'
+          inlineScript: 'echo Azure Connection'
+      - bash: |
+          # Set subscription per instance
+          case $(INSTANCE) in
+            star01)
+              export subscription=$(SUB_STAR01)
+              ;;
+            star02)
+              export subscription=$(SUB_STAR02)
+              ;;   
+            star03)
+              export subscription=$(SUB_STAR03)
+              ;;
+            prod)
+              export subscription=$(SUB_STAR01)
+              ;;
+            prod-t)
+              export subscription=$(SUB_STAR01)
+              ;;                       
+            *)
+              echo exit
+              ;;
+          esac
+          echo "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID;isOutput=true]$subscription"        
+        name: Get_Subscription
+        displayName: Get_Subscription
+  
+  - job: Plan_Job
+    displayName: Plan_Job
+    dependsOn: Set_Subscription
+    variables:
+    - name: ARM_SUBSCRIPTION_ID
+      value: $[ dependencies.Set_Subscription.outputs['Get_Subscription.ARM_SUBSCRIPTION_ID'] ]      
+    steps:
+      - bash: |
+          echo ARM_SUBSCRIPTION_ID $(ARM_SUBSCRIPTION_ID)
+          export ARM_TENANT_ID=$(TENANT_ID)
+          export ARM_SUBSCRIPTION_ID=$(ARM_SUBSCRIPTION_ID)
+          export ARM_CLIENT_ID=$(CLIENT_ID)
+          export ARM_CLIENT_SECRET=$(clientSecret)
+          sudo wget -q https://github.com/gruntwork-io/terragrunt/releases/download/$(TG_VERSION)/terragrunt_linux_amd64 -O /usr/local/bin/terragrunt && sudo chmod +x /usr/local/bin/terragrunt 
+          cd $(PROJECT)/$(ENV)/$(LOCATION)/$(INSTANCE)
+          pwd
+          [[ $(DEBUG) == "yes" ]] && export debug="--terragrunt-log-level debug"
+          terragrunt run-all plan -lock=false $debug
+        env:
+          variable: $(Get_Subscription.ARM_SUBSCRIPTION_ID)
+        name: Terragrunt_Plan
+
+- stage: Apply_Stage
+  displayName: 'Apply_Stage'
+  dependsOn: Plan_Stage
+  jobs:
+  - job: Apply_Job
+    displayName: 'Apply_Job'
+    variables:
+    - name: ARM_SUBSCRIPTION_ID
+      value: $[ stageDependencies.Plan_Stage.Set_Subscription.outputs['Get_Subscription.ARM_SUBSCRIPTION_ID'] ]      
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Init connection'
+      inputs:
+        azureSubscription: $(SERVICECONNECTION)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Init Connection"
+    - bash: |
+        export ARM_TENANT_ID=$(TENANT_ID)
+        export ARM_SUBSCRIPTION_ID=$(ARM_SUBSCRIPTION_ID)
+        export ARM_CLIENT_ID=$(CLIENT_ID)
+        export ARM_CLIENT_SECRET=$(clientSecret)
+        sudo wget -q https://github.com/gruntwork-io/terragrunt/releases/download/$(TG_VERSION)/terragrunt_linux_amd64 -O /usr/local/bin/terragrunt && sudo chmod +x /usr/local/bin/terragrunt 
+        cd $(PROJECT)/$(ENV)/$(LOCATION)/$(INSTANCE)
+        pwd
+        [[ $(DEBUG) == "yes" ]] && export debug="--terragrunt-log-level debug"
+        terragrunt run-all apply --terragrunt-non-interactive -lock-timeout=40m $debug
+      displayName: 'Terragrunt_Apply'
